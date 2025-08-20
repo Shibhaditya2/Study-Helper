@@ -1,0 +1,17 @@
+concept,prerequisite
+Linear Algebra,Basic Mathematics
+Vectors,Linear Algebra
+Matrices,Linear Algebra
+Eigenvalues,Matrices
+Eigenvectors,Eigenvalues
+Vector Spaces,Linear Algebra
+Basis,Vector Spaces
+Dimension,Vector Spaces
+Linear Transformations,Matrices
+Determinants,Matrices
+Inverse Matrices,Determinants
+Row Reduction,Matrices
+Linear Independence,Vectors
+Span,Vectors
+Inner Product,Vectors
+Orthogonality,Inner Product

@@ -1,0 +1,70 @@
+@prefix ns: <http://example.org/studyhelper/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+ns:Basis a skos:Concept ;
+    skos:prefLabel "Basis" ;
+    skos:related ns:Vector_Spaces .
+
+ns:Dimension a skos:Concept ;
+    skos:prefLabel "Dimension" ;
+    skos:related ns:Vector_Spaces .
+
+ns:Eigenvectors a skos:Concept ;
+    skos:prefLabel "Eigenvectors" ;
+    skos:related ns:Eigenvalues .
+
+ns:Inverse_Matrices a skos:Concept ;
+    skos:prefLabel "Inverse Matrices" ;
+    skos:related ns:Determinants .
+
+ns:Linear_Independence a skos:Concept ;
+    skos:prefLabel "Linear Independence" ;
+    skos:related ns:Vectors .
+
+ns:Linear_Transformations a skos:Concept ;
+    skos:prefLabel "Linear Transformations" ;
+    skos:related ns:Matrices .
+
+ns:Orthogonality a skos:Concept ;
+    skos:prefLabel "Orthogonality" ;
+    skos:related ns:Inner_Product .
+
+ns:Row_Reduction a skos:Concept ;
+    skos:prefLabel "Row Reduction" ;
+    skos:related ns:Matrices .
+
+ns:Span a skos:Concept ;
+    skos:prefLabel "Span" ;
+    skos:related ns:Vectors .
+
+ns:Basic_Mathematics a skos:Concept ;
+    skos:prefLabel "Basic Mathematics" .
+
+ns:Determinants a skos:Concept ;
+    skos:prefLabel "Determinants" ;
+    skos:related ns:Matrices .
+
+ns:Eigenvalues a skos:Concept ;
+    skos:prefLabel "Eigenvalues" ;
+    skos:related ns:Matrices .
+
+ns:Inner_Product a skos:Concept ;
+    skos:prefLabel "Inner Product" ;
+    skos:related ns:Vectors .
+
+ns:Vector_Spaces a skos:Concept ;
+    skos:prefLabel "Vector Spaces" ;
+    skos:related ns:Linear_Algebra .
+
+ns:Linear_Algebra a skos:Concept ;
+    skos:prefLabel "Linear Algebra" ;
+    skos:related ns:Basic_Mathematics .
+
+ns:Vectors a skos:Concept ;
+    skos:prefLabel "Vectors" ;
+    skos:related ns:Linear_Algebra .
+
+ns:Matrices a skos:Concept ;
+    skos:prefLabel "Matrices" ;
+    skos:related ns:Linear_Algebra .
+
