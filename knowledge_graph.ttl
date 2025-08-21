@@ -1,4 +1,4 @@
-@prefix ns: <http://example.org/studyhelper/> .
+@prefix ns: <http://www.wikipedia.org> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 
 ns:Basis a skos:Concept ;
