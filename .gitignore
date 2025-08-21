@@ -1,78 +1,47 @@
-# Byte-compiled / optimized / DLL files
+# Python virtual environment
+study_helper_env/
+*.venv/
+
+# Python cache files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# VS Code
-.vscode/
-
-# MacOS
-.DS_Store
-
-# Streamlit cache
-.streamlit/
-
-# Data and model artifacts
+# Generated files
 faiss_index/
 knowledge_graph.ttl
+data/concepts.csv
 
-# Uploaded and processed data
-data/*.pdf
+# User-uploaded data
 data/*.txt
+data/*.pdf
 data/*.epub
-data/*.csv
+!data/sample_book.txt
+!data/sample_doc.pdf
+!data/sample_book.epub
 
-# Ignore secrets or environment files
-.env
-.env.*
+# Streamlit and logs
+.streamlit/
+logs/
+*.log
+
+# pip and package cache
+pip-wheel-metadata/
+*.whl
+*.egg-info/
+*.dist-info/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Sensitive or temporary files
+*.env
+*.bak
+*.tmp

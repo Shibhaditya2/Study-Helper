@@ -1,168 +1,147 @@
 import os
-import warnings
+import time
+import logging
+import torch
 import streamlit as st
+from ingest_documents import ingest_docs
+from build_knowledge_graph import build_kg
+from generate_concepts import generate_concepts
+from agents import process_query, generate_quiz, generate_flashcards, load_vector_store
 
-# Suppress numpy warnings that cause crashes on Python 3.13 Windows
-warnings.filterwarnings("ignore", category=RuntimeWarning, module="numpy")
-warnings.filterwarnings("ignore", category=UserWarning, module="numpy")
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("logs/app.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
-MODULES_LOADED = False
-llm = None
-embeddings = None
-
-try:
-	from langchain_huggingface import HuggingFacePipeline
-	from langchain_core.prompts import PromptTemplate
-	from langchain_community.vectorstores import FAISS
-	try:
-		from langchain_huggingface import HuggingFaceEmbeddings as HFEmb
-	except Exception:
-		from langchain_community.embeddings import HuggingFaceEmbeddings as HFEmb
-	from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
-	from ingest_documents import ingest_docs
-	from build_knowledge_graph import build_kg
-	from kg_retriever import load_kg, traverse_kg
-
-	# Initialize a SMALLER LLM to reduce memory footprint
-	# Use t5-small as a fallback if flan-t5-large is too big
-	try:
-		tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small")
-		model = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-small")
-	except Exception:
-		tokenizer = AutoTokenizer.from_pretrained("t5-small")
-		model = AutoModelForSeq2SeqLM.from_pretrained("t5-small")
-
-	flan_pipeline = pipeline("text2text-generation", model=model, tokenizer=tokenizer, max_length=256)
-	llm = HuggingFacePipeline(pipeline=flan_pipeline)
-
-	# Initialize SMALL embeddings to reduce memory pressure
-	embeddings = HFEmb(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": "cpu"})
-
-	MODULES_LOADED = True
-except Exception as e:
-	st.error(f"Error loading AI modules: {e}")
-	MODULES_LOADED = False
-	llm = None
-	embeddings = None
-
-
-def load_vector_store():
-	if not MODULES_LOADED or not embeddings:
-		return None
-	try:
-		return FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-	except Exception as e:
-		print(f"Error loading vector store: {e}")
-		return None
-
-# Auto-build indexes only if modules are loaded
-if MODULES_LOADED:
-	if not os.path.exists("faiss_index"):
-		st.info("Building vector store...")
-		try:
-			ingest_docs()
-		except Exception as e:
-			st.error(f"Error building vector store: {e}")
-	if not os.path.exists("knowledge_graph.ttl"):
-		st.info("Building knowledge graph...")
-		try:
-			build_kg()
-		except Exception as e:
-			st.error(f"Error building knowledge graph: {e}")
-
-vector_store = load_vector_store()
-kg = load_kg() if MODULES_LOADED else None
-
-# Prompt
-if MODULES_LOADED:
-	rag_prompt = PromptTemplate(
-		input_variables=["question", "context"],
-		template="Question: {question}\nContext: {context}\nAnswer:"
-	)
+# Check GPU availability
+device = "cuda" if torch.cuda.is_available() else "cpu"
+if device == "cuda":
+    gpu_name = torch.cuda.get_device_name(0)
+    gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3  # GB
+    logger.info(f"Application starting with GPU: {gpu_name}, total memory: {gpu_memory:.2f}GB")
 else:
-	rag_prompt = None
+    logger.info("Application starting with CPU (no GPU detected)")
 
-# Streamlit UI
-st.title("Study Helper")
+# Auto-generate concepts.csv
+if not os.path.exists("data/concepts.csv"):
+    logger.info("Generating concepts.csv")
+    generate_concepts()
 
-# Status indicator
-st.header("System Status")
-col1, col2 = st.columns(2)
+# Auto-build indexes
+if not os.path.exists("faiss_index"):
+    logger.info("Starting vector store build")
+    ingest_docs()
+if not os.path.exists("knowledge_graph.ttl"):
+    logger.info("Starting knowledge graph build")
+    build_kg()
 
-with col1:
-	if MODULES_LOADED:
-		st.success("✅ AI Modules: Loaded")
-		if llm:
-			st.success("✅ Language Model: Ready (small)")
-		else:
-			st.error("❌ Language Model: Failed")
-		if embeddings:
-			st.success("✅ Embeddings: Ready (MiniLM)")
-		else:
-			st.error("❌ Embeddings: Failed")
-	else:
-		st.error("❌ AI Modules: Failed to load")
+# Reload vector store
+from agents import vector_store
+vector_store = load_vector_store()
+if not vector_store:
+    st.error("Failed to load vector store. Please rebuild it in the Upload/Settings tab.")
 
-with col2:
-	if vector_store:
-		st.success("✅ Vector Store: Available")
-	else:
-		st.warning("⚠️ Vector Store: Not built")
-	if kg:
-		st.success("✅ Knowledge Graph: Available")
-	else:
-		st.warning("⚠️ Knowledge Graph: Not built")
+# Custom CSS
+st.markdown("""
+<style>
+    .main {background-color: #f0f2f6;}
+    .stTabs [data-testid="stTab"] {background-color: #ffffff; border-radius: 5px; padding: 8px 16px;}
+    .stTabs [aria-selected="true"] {background-color: #4caf50; color: white;}
+    .chat-message {border-radius: 10px; padding: 10px; margin-bottom: 10px;}
+    .user-message {background-color: #dcf8c6;}
+    .assistant-message {background-color: #ffffff;}
+    .stats-box {background-color: #e3f2fd; padding: 10px; border-radius: 5px;}
+</style>
+""", unsafe_allow_html=True)
 
-st.divider()
+st.title("Agentic RAG-Powered Study Helper")
 
-# Sidebar for file upload
-st.sidebar.title("Upload Documents")
-uploaded_files = st.sidebar.file_uploader("Upload txt/pdf/epub", type=["txt", "pdf", "epub"], accept_multiple_files=True)
-if uploaded_files and MODULES_LOADED:
-	for file in uploaded_files:
-		file_path = os.path.join("data", file.name)
-		with open(file_path, "wb") as f:
-			f.write(file.getbuffer())
-	st.sidebar.success("Files uploaded! Rebuilding vector store...")
-	try:
-		ingest_docs(force_rebuild=True)
-		vector_store = load_vector_store()
-		st.sidebar.success("Vector store updated.")
-	except Exception as e:
-		st.sidebar.error(f"Error updating vector store: {e}")
-elif uploaded_files and not MODULES_LOADED:
-	st.sidebar.warning("AI modules not loaded. Cannot process uploaded files.")
-
-# Chat interface
+# Initialize session state
 if "messages" not in st.session_state:
-	st.session_state.messages = []
+    st.session_state.messages = []
+if "stats" not in st.session_state:
+    st.session_state.stats = {"docs_ingested": 0, "chunks": 0, "index_size": 0, "concepts": 0, "triples": 0, "kg_size": 0, "device": device, "gpu_name": gpu_name if device == "cuda" else "CPU", "gpu_memory": gpu_memory if device == "cuda" else 0}
 
-for message in st.session_state.messages:
-	with st.chat_message(message["role"]):
-		st.markdown(message["content"])
+tab1, tab2, tab3, tab4 = st.tabs(["Chat", "Quiz", "Flashcards", "Upload/Settings"])
 
-if prompt := st.chat_input("Ask a question..."):
-	st.session_state.messages.append({"role": "user", "content": prompt})
-	with st.chat_message("user"):
-		st.markdown(prompt)
-	
-	with st.chat_message("assistant"):
-		if not MODULES_LOADED:
-			response = "AI processing is not available. Please check the error messages above."
-		elif not vector_store or not kg:
-			response = "Vector store or knowledge graph not available. Please wait for them to be built."
-		elif not llm:
-			response = "Language model not available. Please check the error messages above."
-		else:
-			with st.spinner("Thinking..."):
-				try:
-					docs = vector_store.similarity_search(prompt, k=3)
-					docs_content = "\n".join([doc.page_content for doc in docs])
-					prereqs = traverse_kg(kg, prompt.split()[-1])
-					context = f"{docs_content}\nPrerequisites: {prereqs}"
-					input_text = rag_prompt.format(question=prompt, context=context)
-					response = llm(input_text)
-				except Exception as e:
-					response = f"Error processing your question: {e}"
-		st.markdown(response)
-	st.session_state.messages.append({"role": "assistant", "content": response})
+with tab1:
+    for message in st.session_state.messages:
+        with st.container():
+            if message["role"] == "user":
+                st.markdown(f"<div class='chat-message user-message'>{message['content']}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<div class='chat-message assistant-message'>{message['content']}</div>", unsafe_allow_html=True)
+
+    if prompt := st.chat_input("Ask a question..."):
+        logger.info(f"User query: {prompt}")
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.spinner("Thinking..."):
+            state = {"query": prompt}
+            response = process_query(state)
+        st.session_state.messages.append({"role": "assistant", "content": response["answer"]})
+        st.rerun()
+
+with tab2:
+    topic = st.text_input("Enter topic for quiz:")
+    if st.button("Generate Quiz"):
+        with st.spinner("Generating..."):
+            quiz = generate_quiz(topic)
+        st.markdown(quiz)
+
+with tab3:
+    concept = st.text_input("Enter concept for flashcards:")
+    if st.button("Generate Flashcards"):
+        with st.spinner("Generating..."):
+            flashcards = generate_flashcards(concept)
+        st.markdown(flashcards)
+
+with tab4:
+    st.subheader("Upload Documents")
+    uploaded_files = st.file_uploader("Upload txt/pdf/epub", type=["txt", "pdf", "epub"], accept_multiple_files=True)
+    if uploaded_files:
+        start_time = time.time()
+        file_count = len(uploaded_files)
+        total_size = sum(file.size for file in uploaded_files) / 1024 / 1024  # MB
+        logger.info(f"Uploading {file_count} files, total size={total_size:.2f}MB")
+        for file in uploaded_files:
+            file_path = os.path.join("data", file.name)
+            with open(file_path, "wb") as f:
+                f.write(file.getbuffer())
+        with st.spinner("Rebuilding vector store..."):
+            ingest_docs(force_rebuild=True)
+            vector_store = load_vector_store()
+            if vector_store:
+                st.session_state.stats["docs_ingested"] += file_count
+                st.session_state.stats["index_size"] = sum(os.path.getsize(os.path.join("faiss_index", f)) for f in os.listdir("faiss_index") if os.path.isfile(os.path.join("faiss_index", f))) / 1024 / 1024
+                st.success(f"Vector store updated! {file_count} files uploaded ({total_size:.2f}MB)")
+            else:
+                st.error("Failed to rebuild vector store. Check logs for details.")
+        elapsed_time = time.time() - start_time
+        logger.info(f"Upload and rebuild completed: time={elapsed_time:.2f}s")
+
+    st.subheader("Rebuild Knowledge Graph")
+    if st.button("Rebuild Knowledge Graph"):
+        with st.spinner("Rebuilding KG..."):
+            generate_concepts()
+            build_kg()
+            st.session_state.stats["concepts"] = sum(1 for _ in open("data/concepts.csv")) - 1  # Exclude header
+            st.session_state.stats["kg_size"] = os.path.getsize("knowledge_graph.ttl") / 1024 / 1024
+        st.success("Knowledge graph rebuilt!")
+
+    st.subheader("System Stats")
+    if not vector_store:
+        st.warning("Vector store not loaded. Upload documents or rebuild to enable full functionality.")
+    st.markdown(f"""
+    <div class='stats-box'>
+        <b>Device:</b> {st.session_state.stats['device'].upper()} ({st.session_state.stats['gpu_name']})<br>
+        <b>GPU Memory:</b> {st.session_state.stats['gpu_memory']:.2f}GB<br>
+        <b>Vector Store:</b> {st.session_state.stats['docs_ingested']} documents, {st.session_state.stats['chunks']} chunks, {st.session_state.stats['index_size']:.2f}MB<br>
+        <b>Knowledge Graph:</b> {st.session_state.stats['concepts']} concepts, {st.session_state.stats['triples']} triples, {st.session_state.stats['kg_size']:.2f}MB
+    </div>
+    """, unsafe_allow_html=True)
